@@ -38,18 +38,19 @@
 
       // Map Google Sheet columns to dashboard variables
       allData = sheetData.map(row => ({
-        timestamp: new Date(row['Philippine Time']).getTime(),
-        pv_total_power: parseFloat(row['PV Total Power']),
-        pv1_input_power: parseFloat(row['PV1 Input Power']),
-        pv2_input_power: parseFloat(row['PV2 Input Power']),
-        load_active_power: parseFloat(row['Load Active Power']),
-        grid_active_power: parseFloat(row['Grid Active Power']),
-        battery_active_power: parseFloat(row['Battery Active Power']),
-        battery_charging_current: parseFloat(row['Battery Charging Current']),
-        battery_discharging_current: parseFloat(row['Battery Discharging Current']),
-        battery_voltage: parseFloat(row['Battery Voltage']),
-        inverter_power: parseFloat(row['Inverter Power'])
-      }));
+       timestamp: new Date(row['Philippine Time']).getTime(),
+       pv_total_power: parseFloat(row['PV Total Power'].toString().replace(/,/g,'')) || 0,
+       pv1_input_power: parseFloat(row['PV1 Input Power'].toString().replace(/,/g,'')) || 0,
+       pv2_input_power: parseFloat(row['PV2 Input Power'].toString().replace(/,/g,'')) || 0,
+       load_active_power: parseFloat(row['Load Active Power'].toString().replace(/,/g,'')) || 0,
+       grid_active_power: parseFloat(row['Grid Active Power'].toString().replace(/,/g,'')) || 0,
+       battery_active_power: parseFloat(row['Battery Active Power'].toString().replace(/,/g,'')) || 0,
+       battery_charging_current: parseFloat(row['Battery Charging Current'].toString().replace(/,/g,'')) || 0,
+       battery_discharging_current: parseFloat(row['Battery Discharging Current'].toString().replace(/,/g,'')) || 0,
+       battery_voltage: parseFloat(row['Battery Voltage'].toString().replace(/,/g,'')) || 0,
+       inverter_power: parseFloat(row['Inverter Power'].toString().replace(/,/g,'')) || 0
+     }));
+
 
       updateRealtime();
       drawChart(allData);
@@ -140,3 +141,4 @@
 </script>
 </body>
 </html>
+
