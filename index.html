@@ -6,8 +6,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   body { font-family: Arial, sans-serif; margin: 20px; }
-  button { margin: 5px; padding: 5px 10px; cursor: pointer; }
-  #tabs button { margin-right: 10px; }
+  button { margin: 5px; padding: 5px 10px; }
+  .tab { cursor: pointer; display: inline-block; padding: 10px; background:#eee; margin-right:5px; }
+  .tab.active { background:#ccc; }
+  .tab-content { display:none; margin-top:20px; }
+  .tab-content.active { display:block; }
 </style>
 <script>
 const googleSheetURL = "https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec";
@@ -16,44 +19,65 @@ let chart;
 let allData = [];
 let lastLiveData = {};
 
+// Convert string/number safely
 function getNumber(row, key) {
-  let val = row[key] ?? row[key.trim()] ?? 0;
+  let val = row[key] ?? 0;
   if (typeof val === "string") val = val.replace(/,/g,'');
   let num = parseFloat(val);
   return isNaN(num) ? 0 : num;
 }
 
-// ----- Load history from Google Sheets -----
-async function loadHistoryFromSheet() {
+// Load all data from Google Sheets
+async function loadData() {
   try {
-    let resp = await fetch(googleSheetURL);
-    let sheetData = await resp.json();
+    const resp = await fetch(googleSheetURL);
+    const sheetData = await resp.json();
+
+    if (!Array.isArray(sheetData)) throw "Invalid data";
 
     allData = sheetData.map(row => ({
-      timestamp: new Date(row['Philippine Time'] ?? row['Philippine Time'.trim()]).getTime(),
-      pv_total_power: getNumber(row, 'PV Total Power'),
-      pv1_input_power: getNumber(row, 'PV1 Input Power'),
-      pv2_input_power: getNumber(row, 'PV2 Input Power'),
-      load_active_power: getNumber(row, 'Load Active Power'),
-      grid_active_power: getNumber(row, 'Grid Active Power'),
-      battery_active_power: getNumber(row, 'Battery Active Power'),
-      battery_charging_current: getNumber(row, 'Battery Charging Current'),
-      battery_discharging_current: getNumber(row, 'Battery Discharging Current'),
-      battery_voltage: getNumber(row, 'Battery Voltage'),
-      inverter_power: getNumber(row, 'Inverter Power')
+      timestamp: new Date(row.timestamp ?? row['Philippine Time']).getTime(),
+      pv_total_power: getNumber(row, 'pv_total_power'),
+      pv1_input_power: getNumber(row, 'pv1_input_power'),
+      pv2_input_power: getNumber(row, 'pv2_input_power'),
+      load_active_power: getNumber(row, 'load_active_power'),
+      grid_active_power: getNumber(row, 'grid_active_power'),
+      battery_active_power: getNumber(row, 'battery_active_power'),
+      battery_charging_current: getNumber(row, 'battery_charging_current'),
+      battery_discharging_current: getNumber(row, 'battery_discharging_current'),
+      battery_voltage: getNumber(row, 'battery_voltage'),
+      inverter_power: getNumber(row, 'inverter_power')
     }));
 
-    drawChart(allData);
     updateLiveReadings(allData[allData.length-1] || {});
-  } catch (err) {
-    console.error("Failed to load data:", err);
-    document.getElementById('realtime').innerHTML = "Failed to load live data.";
+    drawHistoryChart(allData);
+
+  } catch(err) {
+    console.error(err);
+    document.getElementById("realtime").innerHTML = "Failed to load live data.";
+    document.getElementById("historyChartContainer").innerHTML = "Failed to load history data.";
   }
 }
 
-// ----- Draw chart for history -----
-function drawChart(data) {
-  let labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
+// Update live readings
+function updateLiveReadings(data) {
+  lastLiveData = {...data};
+  document.getElementById("realtime").innerHTML =
+    "PV Total Power: " + data.pv_total_power + " kW<br>" +
+    "PV1 Input Power: " + data.pv1_input_power + " kW<br>" +
+    "PV2 Input Power: " + data.pv2_input_power + " kW<br>" +
+    "Load Active Power: " + data.load_active_power + " kW<br>" +
+    "Grid Active Power: " + data.grid_active_power + " kW<br>" +
+    "Inverter Power : " + data.inverter_power + " kW<br>" +
+    "Battery Active Power: " + data.battery_active_power + " kW<br>" +
+    "Battery Charging Current: " + data.battery_charging_current + " A<br>" +
+    "Battery Discharging Current: " + data.battery_discharging_current + " A<br>" +
+    "Battery Voltage: " + data.battery_voltage + " V<br>";
+}
+
+// Draw history chart
+function drawHistoryChart(data) {
+  const labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
 
   for (let dp of data) {
     let dt = new Date(dp.timestamp);
@@ -69,7 +93,7 @@ function drawChart(data) {
 
   if(chart) chart.destroy();
 
-  let ctx = document.getElementById('chart').getContext('2d');
+  let ctx = document.getElementById('historyChart').getContext('2d');
   chart = new Chart(ctx, {
     type:'line',
     data:{
@@ -88,82 +112,64 @@ function drawChart(data) {
   });
 }
 
-// ----- Filter chart by date range -----
-function filterChart() {
-  let startInput = document.getElementById("start").value;
-  let endInput = document.getElementById("end").value;
-  if (!startInput || !endInput) { drawChart(allData); return; }
+// Filter history
+function filterHistory() {
+  const startInput = document.getElementById("start").value;
+  const endInput = document.getElementById("end").value;
+  if (!startInput || !endInput) { drawHistoryChart(allData); return; }
 
-  let [startDatePart, startTimePart] = startInput.split("T");
-  let [endDatePart, endTimePart] = endInput.split("T");
+  const start = new Date(startInput+":00+08:00").getTime();
+  const end = new Date(endInput+":00+08:00").getTime();
 
-  let startManila = new Date(`${startDatePart}T${startTimePart}:00+08:00`);
-  let endManila = new Date(`${endDatePart}T${endTimePart}:00+08:00`);
-
-  let filtered = allData.filter(dp =>
-    dp.timestamp >= startManila.getTime() && dp.timestamp <= endManila.getTime()
-  );
-
-  drawChart(filtered);
+  const filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
+  drawHistoryChart(filtered);
 }
 
-// ----- Clear chart filter -----
-function clearChartFilter() {
+function clearHistoryFilter() {
   document.getElementById("start").value = "";
   document.getElementById("end").value = "";
-  drawChart(allData);
+  drawHistoryChart(allData);
 }
 
-// ----- Update live readings -----
-function updateLiveReadings(data) {
-  lastLiveData = {...data};
-  document.getElementById("realtime").innerHTML =
-    "PV Total Power: " + data.pv_total_power + " kW<br>" +
-    "PV1 Input Power: " + data.pv1_input_power + " kW<br>" +
-    "PV2 Input Power: " + data.pv2_input_power + " kW<br>" +
-    "Load Active Power: " + data.load_active_power + " kW<br>" +
-    "Grid Active Power: " + data.grid_active_power + " kW<br>" +
-    "Inverter Power : " + data.inverter_power + " kW<br>" +
-    "Battery Active Power: " + data.battery_active_power + " kW<br>" +
-    "Battery Charging Current: " + data.battery_charging_current + " A<br>" +
-    "Battery Discharging Current: " + data.battery_discharging_current + " A<br>" +
-    "Battery Voltage: " + data.battery_voltage + " V<br>";
+// Tabs
+function openTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(tabName+'Tab').classList.add('active');
+  document.getElementById(tabName+'Content').classList.add('active');
 }
 
-// ----- Tab switching -----
-function showTab(tab) {
-  document.getElementById('liveTab').style.display = (tab === 'live') ? 'block' : 'none';
-  document.getElementById('historyTab').style.display = (tab === 'history') ? 'block' : 'none';
-}
-
-// ----- Init -----
-window.onload = async () => {
-  await loadHistoryFromSheet();
-  setInterval(loadHistoryFromSheet, 10000); // refresh every 10s
+// On page load
+window.onload = () => {
+  openTab('live');
+  loadData();
+  setInterval(loadData, 10000); // refresh every 10s
 };
 </script>
 </head>
 <body>
-<h2>ESP32 Solar Dashboard (Google Sheets Data)</h2>
+<h2>ESP32 Solar Dashboard</h2>
 
-<div id="tabs">
-  <button onclick="showTab('live')">Live</button>
-  <button onclick="showTab('history')">History</button>
+<!-- Tabs -->
+<div>
+  <div id="liveTab" class="tab" onclick="openTab('live')">Live</div>
+  <div id="historyTab" class="tab" onclick="openTab('history')">History</div>
 </div>
 
-<!-- Live tab -->
-<div id="liveTab">
+<!-- Live Tab -->
+<div id="liveContent" class="tab-content">
   <div id="realtime">Loading live data...</div>
 </div>
 
-<!-- History tab -->
-<div id="historyTab" style="display:none;">
+<!-- History Tab -->
+<div id="historyContent" class="tab-content">
   <label>Start: <input type="datetime-local" id="start"></label>
   <label>End: <input type="datetime-local" id="end"></label>
-  <button onclick="filterChart()">Apply</button>
-  <button onclick="clearChartFilter()">Clear</button>
-  <canvas id="chart" width="800" height="400"></canvas>
+  <button onclick="filterHistory()">Apply</button>
+  <button onclick="clearHistoryFilter()">Clear</button>
+  <div id="historyChartContainer">
+    <canvas id="historyChart" width="1000" height="400"></canvas>
+  </div>
 </div>
-
 </body>
 </html>
