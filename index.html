@@ -1,6 +1,13 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
+<title>ESP32 Solar Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  button { margin: 5px; padding: 5px 10px; }
+</style>
 <script>
 const googleSheetURL = "https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec";
 
@@ -8,101 +15,113 @@ let chart;
 let allData = [];
 let lastLiveData = {};
 
-// --- Load historical Google Sheets data ---
 async function loadHistoryFromSheet() {
   try {
-    const resp = await fetch(googleSheetURL);
-    allData = await resp.json();
+    let resp = await fetch(googleSheetURL);
+    let sheetData = await resp.json();
+
+    // Map sheet data into correct numeric fields
+    allData = sheetData.map(row => ({
+      timestamp: parseInt(row['timestamp']) || Date.now(),
+      pv_total_power: parseFloat(row['pv_total_power']) || 0,
+      pv1_input_power: parseFloat(row['pv1_input_power']) || 0,
+      pv2_input_power: parseFloat(row['pv2_input_power']) || 0,
+      load_active_power: parseFloat(row['load_active_power']) || 0,
+      grid_active_power: parseFloat(row['grid_active_power']) || 0,
+      battery_active_power: parseFloat(row['battery_active_power']) || 0,
+      battery_charging_current: parseFloat(row['battery_charging_current']) || 0,
+      battery_discharging_current: parseFloat(row['battery_discharging_current']) || 0,
+      battery_voltage: parseFloat(row['battery_voltage']) || 0,
+      inverter_power: parseFloat(row['inverter_power']) || 0
+    }));
+
+    // Draw chart and update live readings
     drawChart(allData);
+    updateLiveReadings(allData[allData.length - 1] || {});
   } catch (err) {
-    console.error(err);
-    alert("Failed to load data from Google Sheets.");
+    console.error("Failed to load data:", err);
+    document.getElementById("realtime").innerHTML = "Failed to load data.";
   }
 }
 
-// --- Draw chart ---
 function drawChart(data) {
-  const labels = [];
-  const pvTotal = [], output = [], battPower = [], grid = [], load = [], inverter = [];
+  let labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
 
-  data.forEach(dp => {
-    const dt = new Date(dp.timestamp);
+  for (let dp of data) {
+    let dt = new Date(dp.timestamp);
     labels.push(dt.toLocaleString('en-PH', {hour12:false, timeZone:'Asia/Manila'}));
-    pvTotal.push(Number(dp.pv_total_power));
-    output.push(Number(dp.output_active_power));
-    battPower.push(Number(dp.battery_active_power));
-    grid.push(Number(dp.grid_active_power));
-    load.push(Number(dp.load_active_power));
-    inverter.push(Number(dp.inverter_power));
-  });
+    pvTotal.push(dp.pv_total_power);
+    pv1.push(dp.pv1_input_power);
+    pv2.push(dp.pv2_input_power);
+    load.push(dp.load_active_power);
+    grid.push(dp.grid_active_power);
+    batt.push(dp.battery_active_power);
+    inverter.push(dp.inverter_power);
+  }
 
   if(chart) chart.destroy();
 
-  const ctx = document.getElementById('chart').getContext('2d');
+  let ctx = document.getElementById('chart').getContext('2d');
   chart = new Chart(ctx, {
-    type: 'line',
-    data: {
+    type:'line',
+    data:{
       labels: labels,
-      datasets: [
-        { label: 'PV Total Power (kW)', data: pvTotal, borderColor: 'green', fill: false },
-        { label: 'Battery Power (kW)', data: battPower, borderColor: 'orange', fill: false },
-        { label: 'Grid Power (kW)', data: grid, borderColor: 'purple', fill: false },
-        { label: 'Load Power (kW)', data: load, borderColor: 'blue', fill: false },
-        { label: 'Inverter Power (kW)', data: inverter, borderColor: 'red', fill: false }
+      datasets:[
+        {label:'PV Total (kW)', data:pvTotal, borderColor:'green', fill:false},
+        {label:'PV1 (kW)', data:pv1, borderColor:'blue', fill:false},
+        {label:'PV2 (kW)', data:pv2, borderColor:'orange', fill:false},
+        {label:'Load (kW)', data:load, borderColor:'purple', fill:false},
+        {label:'Grid (kW)', data:grid, borderColor:'gray', fill:false},
+        {label:'Battery (kW)', data:batt, borderColor:'black', fill:false},
+        {label:'Inverter (kW)', data:inverter, borderColor:'red', fill:false}
       ]
     },
-    options: { responsive: true, scales: { x: { display: true } } }
+    options:{responsive:true, scales:{x:{display:true}}}
   });
 }
 
-// --- Filter chart by datetime range ---
-function filterChart() { 
-  const startInput = document.getElementById("start").value;
-  const endInput = document.getElementById("end").value;
+function filterChart() {
+  let startInput = document.getElementById("start").value;
+  let endInput = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
-  const [startDatePart, startTimePart] = startInput.split("T");
-  const [endDatePart, endTimePart] = endInput.split("T");
+  let [startDatePart, startTimePart] = startInput.split("T");
+  let [endDatePart, endTimePart] = endInput.split("T");
 
-  const startManila = new Date(`${startDatePart}T${startTimePart}:00+08:00`);
-  const endManila   = new Date(`${endDatePart}T${endTimePart}:00+08:00`);
+  let startManila = new Date(`${startDatePart}T${startTimePart}:00+08:00`);
+  let endManila = new Date(`${endDatePart}T${endTimePart}:00+08:00`);
 
-  const filtered = allData.filter(dp => dp.timestamp >= startManila.getTime() && dp.timestamp <= endManila.getTime());
+  let filtered = allData.filter(dp =>
+    dp.timestamp >= startManila.getTime() && dp.timestamp <= endManila.getTime()
+  );
+
   drawChart(filtered);
 }
 
-// --- Clear filter ---
 function clearChartFilter() {
   document.getElementById("start").value = "";
   document.getElementById("end").value = "";
   drawChart(allData);
 }
 
-// --- Update live readings (from latest row) ---
-function refreshRealtime() {
-  if(allData.length === 0) return;
-  const data = allData[allData.length-1]; // latest row
-
-  document.getElementById("realtime").innerHTML =
-    `PV Total Power: ${data.pv_total_power} kW<br>` +
-    `PV1 Input Power: ${data.pv1_input_power} kW<br>` +
-    `PV2 Input Power: ${data.pv2_input_power} kW<br>` +
-    `Load Active Power: ${data.load_active_power} kW<br>` +
-    `Grid Active Power: ${data.grid_active_power} kW<br>` +
-    `Inverter Power: ${data.inverter_power} kW<br>` +
-    `Battery Active Power: ${data.battery_active_power} kW<br>` +
-    `Battery Charging Current: ${data.battery_charging_current} A<br>` +
-    `Battery Discharging Current: ${data.battery_discharging_current} A<br>` +
-    `Battery Voltage: ${data.battery_voltage} V<br>`;
-
+function updateLiveReadings(data) {
   lastLiveData = {...data};
+  document.getElementById("realtime").innerHTML =
+    "PV Total Power: " + data.pv_total_power + " kW<br>" +
+    "PV1 Input Power: " + data.pv1_input_power + " kW<br>" +
+    "PV2 Input Power: " + data.pv2_input_power + " kW<br>" +
+    "Load Active Power: " + data.load_active_power + " kW<br>" +
+    "Grid Active Power: " + data.grid_active_power + " kW<br>" +
+    "Inverter Power: " + data.inverter_power + " kW<br>" +
+    "Battery Active Power: " + data.battery_active_power + " kW<br>" +
+    "Battery Charging Current: " + data.battery_charging_current + " A<br>" +
+    "Battery Discharging Current: " + data.battery_discharging_current + " A<br>" +
+    "Battery Voltage: " + data.battery_voltage + " V<br>";
 }
 
-// --- On page load ---
 window.onload = async () => {
   await loadHistoryFromSheet();
-  refreshRealtime();
-  setInterval(refreshRealtime, 10000); // refresh live readings every 10s
+  setInterval(loadHistoryFromSheet, 10000); // refresh every 10s
 };
 </script>
 </head>
@@ -115,7 +134,7 @@ window.onload = async () => {
 <label>End: <input type="datetime-local" id="end"></label>
 <button onclick="filterChart()">Apply</button>
 <button onclick="clearChartFilter()">Clear</button>
-
-<canvas id="chart" width="800" height="400"></canvas><br>
+<br>
+<canvas id="chart" width="800" height="400"></canvas>
 </body>
 </html>
