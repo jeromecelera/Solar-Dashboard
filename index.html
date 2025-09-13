@@ -19,39 +19,28 @@ let chart;
 let allData = [];
 let lastLiveData = {};
 
-// Convert string/number safely
-function getNumber(row, key) {
-  let val = row[key] ?? 0;
-  if (typeof val === "string") val = val.replace(/,/g,'');
-  let num = parseFloat(val);
-  return isNaN(num) ? 0 : num;
-}
-
-// Load all data from Google Sheets
+// ------------------ Load all data from Google Sheets ------------------
 async function loadData() {
   try {
     const resp = await fetch(googleSheetURL);
     const sheetData = await resp.json();
 
-    if (!Array.isArray(sheetData)) throw "Invalid data";
-
     allData = sheetData.map(row => ({
-      timestamp: new Date(row.timestamp ?? row['Philippine Time']).getTime(),
-      pv_total_power: getNumber(row, 'pv_total_power'),
-      pv1_input_power: getNumber(row, 'pv1_input_power'),
-      pv2_input_power: getNumber(row, 'pv2_input_power'),
-      load_active_power: getNumber(row, 'load_active_power'),
-      grid_active_power: getNumber(row, 'grid_active_power'),
-      battery_active_power: getNumber(row, 'battery_active_power'),
-      battery_charging_current: getNumber(row, 'battery_charging_current'),
-      battery_discharging_current: getNumber(row, 'battery_discharging_current'),
-      battery_voltage: getNumber(row, 'battery_voltage'),
-      inverter_power: getNumber(row, 'inverter_power')
+      timestamp: row.timestamp ?? 0,
+      pv_total_power: row.pv_total_power ?? 0,
+      pv1_input_power: row.pv1_input_power ?? 0,
+      pv2_input_power: row.pv2_input_power ?? 0,
+      load_active_power: row.load_active_power ?? 0,
+      grid_active_power: row.grid_active_power ?? 0,
+      battery_active_power: row.battery_active_power ?? 0,
+      battery_charging_current: row.battery_charging_current ?? 0,
+      battery_discharging_current: row.battery_discharging_current ?? 0,
+      battery_voltage: row.battery_voltage ?? 0,
+      inverter_power: row.inverter_power ?? 0
     }));
 
     updateLiveReadings(allData[allData.length-1] || {});
     drawHistoryChart(allData);
-
   } catch(err) {
     console.error(err);
     document.getElementById("realtime").innerHTML = "Failed to load live data.";
@@ -59,23 +48,23 @@ async function loadData() {
   }
 }
 
-// Update live readings
+// ------------------ Update live readings ------------------
 function updateLiveReadings(data) {
   lastLiveData = {...data};
   document.getElementById("realtime").innerHTML =
-    "PV Total Power: " + data.pv_total_power + " kW<br>" +
-    "PV1 Input Power: " + data.pv1_input_power + " kW<br>" +
-    "PV2 Input Power: " + data.pv2_input_power + " kW<br>" +
-    "Load Active Power: " + data.load_active_power + " kW<br>" +
-    "Grid Active Power: " + data.grid_active_power + " kW<br>" +
-    "Inverter Power : " + data.inverter_power + " kW<br>" +
-    "Battery Active Power: " + data.battery_active_power + " kW<br>" +
-    "Battery Charging Current: " + data.battery_charging_current + " A<br>" +
-    "Battery Discharging Current: " + data.battery_discharging_current + " A<br>" +
-    "Battery Voltage: " + data.battery_voltage + " V<br>";
+    `PV Total Power: ${data.pv_total_power} kW<br>` +
+    `PV1 Input Power: ${data.pv1_input_power} kW<br>` +
+    `PV2 Input Power: ${data.pv2_input_power} kW<br>` +
+    `Load Active Power: ${data.load_active_power} kW<br>` +
+    `Grid Active Power: ${data.grid_active_power} kW<br>` +
+    `Inverter Power : ${data.inverter_power} kW<br>` +
+    `Battery Active Power: ${data.battery_active_power} kW<br>` +
+    `Battery Charging Current: ${data.battery_charging_current} A<br>` +
+    `Battery Discharging Current: ${data.battery_discharging_current} A<br>` +
+    `Battery Voltage: ${data.battery_voltage} V<br>`;
 }
 
-// Draw history chart
+// ------------------ Draw history chart ------------------
 function drawHistoryChart(data) {
   const labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
 
@@ -112,7 +101,7 @@ function drawHistoryChart(data) {
   });
 }
 
-// Filter history
+// ------------------ Filter history ------------------
 function filterHistory() {
   const startInput = document.getElementById("start").value;
   const endInput = document.getElementById("end").value;
@@ -131,7 +120,7 @@ function clearHistoryFilter() {
   drawHistoryChart(allData);
 }
 
-// Tabs
+// ------------------ Tabs ------------------
 function openTab(tabName) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -139,7 +128,7 @@ function openTab(tabName) {
   document.getElementById(tabName+'Content').classList.add('active');
 }
 
-// On page load
+// ------------------ On page load ------------------
 window.onload = () => {
   openTab('live');
   loadData();
