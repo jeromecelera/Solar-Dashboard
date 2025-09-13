@@ -15,32 +15,42 @@ let chart;
 let allData = [];
 let lastLiveData = {};
 
+function getNumber(row, key) {
+  let val = row[key] ?? 0;
+  if (typeof val === "string") val = val.replace(/,/g,'');
+  let num = parseFloat(val);
+  return isNaN(num) ? 0 : num;
+}
+
 async function loadHistoryFromSheet() {
   try {
     let resp = await fetch(googleSheetURL);
     let sheetData = await resp.json();
 
-    // Map sheet data into correct numeric fields
     allData = sheetData.map(row => ({
-      timestamp: parseInt(row['timestamp']) || Date.now(),
-      pv_total_power: parseFloat(row['pv_total_power']) || 0,
-      pv1_input_power: parseFloat(row['pv1_input_power']) || 0,
-      pv2_input_power: parseFloat(row['pv2_input_power']) || 0,
-      load_active_power: parseFloat(row['load_active_power']) || 0,
-      grid_active_power: parseFloat(row['grid_active_power']) || 0,
-      battery_active_power: parseFloat(row['battery_active_power']) || 0,
-      battery_charging_current: parseFloat(row['battery_charging_current']) || 0,
-      battery_discharging_current: parseFloat(row['battery_discharging_current']) || 0,
-      battery_voltage: parseFloat(row['battery_voltage']) || 0,
-      inverter_power: parseFloat(row['inverter_power']) || 0
+      timestamp: new Date(row.timestamp).getTime(),
+      pv_total_power: getNumber(row, 'pv_total_power'),
+      pv1_input_power: getNumber(row, 'pv1_input_power'),
+      pv2_input_power: getNumber(row, 'pv2_input_power'),
+      load_active_power: getNumber(row, 'load_active_power'),
+      grid_active_power: getNumber(row, 'grid_active_power'),
+      battery_active_power: getNumber(row, 'battery_active_power'),
+      battery_charging_current: getNumber(row, 'battery_charging_current'),
+      battery_discharging_current: getNumber(row, 'battery_discharging_current'),
+      battery_voltage: getNumber(row, 'battery_voltage'),
+      inverter_power: getNumber(row, 'inverter_power')
     }));
 
-    // Draw chart and update live readings
-    drawChart(allData);
-    updateLiveReadings(allData[allData.length - 1] || {});
+    if(allData.length > 0){
+      drawChart(allData);
+      updateLiveReadings(allData[allData.length-1]);
+    } else {
+      document.getElementById("realtime").innerHTML = "No data available.";
+    }
+
   } catch (err) {
-    console.error("Failed to load data:", err);
-    document.getElementById("realtime").innerHTML = "Failed to load data.";
+    console.error(err);
+    document.getElementById("realtime").innerHTML = "Failed to load data from Google Sheets.";
   }
 }
 
@@ -135,6 +145,7 @@ window.onload = async () => {
 <button onclick="filterChart()">Apply</button>
 <button onclick="clearChartFilter()">Clear</button>
 <br>
+
 <canvas id="chart" width="800" height="400"></canvas>
 </body>
 </html>
