@@ -15,11 +15,11 @@
 <script>
 const googleSheetURL = "https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec";
 
-let chart;
 let allData = [];
 let lastLiveData = {};
+let liveChart;
 
-// ------------------ Helpers ------------------
+// ------------------ Helper ------------------
 function getNumber(row, key) {
   let val = row[key] ?? 0;
   if (typeof val === "string") val = val.replace(/,/g,'');
@@ -47,12 +47,16 @@ async function loadData() {
       inverter_power: getNumber(row, 'inverter_power' ?? 'Inverter Power')
     }));
 
+    // Update live readings and live graph
     updateLiveReadings(allData[allData.length-1] || {});
-    drawHistoryChart(allData);
+    drawLiveChart(allData);
+
+    // Update history kWh totals
+    updateHistoryTotals(allData);
+
   } catch(err) {
     console.error(err);
     document.getElementById("realtime").innerHTML = "Failed to load live data.";
-    document.getElementById("kwhTotals").innerHTML = "Failed to load history data.";
   }
 }
 
@@ -65,41 +69,14 @@ function updateLiveReadings(data) {
     "PV2 Input Power: " + data.pv2_input_power + " kW<br>" +
     "Load Active Power: " + data.load_active_power + " kW<br>" +
     "Grid Active Power: " + data.grid_active_power + " kW<br>" +
-    "Inverter Power : " + data.inverter_power + " kW<br>" +
+    "Inverter Power: " + data.inverter_power + " kW<br>" +
     "Battery Active Power: " + data.battery_active_power + " kW<br>" +
     "Battery Charging Current: " + data.battery_charging_current + " A<br>" +
     "Battery Discharging Current: " + data.battery_discharging_current + " A<br>" +
     "Battery Voltage: " + data.battery_voltage + " V<br>";
 }
 
-// ------------------ History Tab ------------------
-function updateKwhTotals(data) {
-  if(data.length < 2) {
-    document.getElementById('kwhTotals').innerHTML = "Not enough data to calculate kWh.";
-    return;
-  }
-  let totalPv=0, totalPv1=0, totalPv2=0, totalLoad=0, totalBatt=0, totalGrid=0, totalInverter=0;
-  for(let i=1; i<data.length; i++){
-    let dtHours = (data[i].timestamp - data[i-1].timestamp)/1000/3600;
-    totalPv += data[i-1].pv_total_power * dtHours;
-    totalPv1 += data[i-1].pv1_input_power * dtHours;
-    totalPv2 += data[i-1].pv2_input_power * dtHours;
-    totalLoad += data[i-1].load_active_power * dtHours;
-    totalBatt += data[i-1].battery_active_power * dtHours;
-    totalGrid += data[i-1].grid_active_power * dtHours;
-    totalInverter += data[i-1].inverter_power * dtHours;
-  }
-  document.getElementById('kwhTotals').innerHTML =
-    `PV Total: ${totalPv.toFixed(3)} kWh<br>` +
-    `PV1: ${totalPv1.toFixed(3)} kWh<br>` +
-    `PV2: ${totalPv2.toFixed(3)} kWh<br>` +
-    `Load: ${totalLoad.toFixed(3)} kWh<br>` +
-    `Grid: ${totalGrid.toFixed(3)} kWh<br>` +
-    `Battery: ${totalBatt.toFixed(3)} kWh<br>` +
-    `Inverter: ${totalInverter.toFixed(3)} kWh`;
-}
-
-function drawHistoryChart(data) {
+function drawLiveChart(data) {
   const labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
 
   for (let dp of data) {
@@ -114,10 +91,10 @@ function drawHistoryChart(data) {
     inverter.push(dp.inverter_power);
   }
 
-  if(chart) chart.destroy();
+  if(liveChart) liveChart.destroy();
 
-  let ctx = document.getElementById('historyChart').getContext('2d');
-  chart = new Chart(ctx, {
+  let ctx = document.getElementById('liveChart').getContext('2d');
+  liveChart = new Chart(ctx, {
     type:'line',
     data:{
       labels: labels,
@@ -133,26 +110,30 @@ function drawHistoryChart(data) {
     },
     options:{responsive:true, scales:{x:{display:true}}}
   });
-
-  updateKwhTotals(data);
 }
 
-function filterHistory() {
-  const startInput = document.getElementById("start").value;
-  const endInput = document.getElementById("end").value;
-  if (!startInput || !endInput) { drawHistoryChart(allData); return; }
+// ------------------ History Tab (kWh totals) ------------------
+function updateHistoryTotals(data) {
+  let pvTotal=0, pv1=0, pv2=0, load=0, grid=0, batt=0, inverter=0;
 
-  const start = new Date(startInput+":00+08:00").getTime();
-  const end = new Date(endInput+":00+08:00").getTime();
+  data.forEach(dp => {
+    pvTotal += dp.pv_total_power*1;   // assuming each row represents 1 hour fraction
+    pv1 += dp.pv1_input_power*1;
+    pv2 += dp.pv2_input_power*1;
+    load += dp.load_active_power*1;
+    grid += dp.grid_active_power*1;
+    batt += dp.battery_active_power*1;
+    inverter += dp.inverter_power*1;
+  });
 
-  const filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
-  drawHistoryChart(filtered);
-}
-
-function clearHistoryFilter() {
-  document.getElementById("start").value = "";
-  document.getElementById("end").value = "";
-  drawHistoryChart(allData);
+  document.getElementById("historyTotals").innerHTML =
+    "PV Total: " + pvTotal.toFixed(3) + " kWh<br>" +
+    "PV1: " + pv1.toFixed(3) + " kWh<br>" +
+    "PV2: " + pv2.toFixed(3) + " kWh<br>" +
+    "Load: " + load.toFixed(3) + " kWh<br>" +
+    "Grid: " + grid.toFixed(3) + " kWh<br>" +
+    "Battery: " + batt.toFixed(3) + " kWh<br>" +
+    "Inverter: " + inverter.toFixed(3) + " kWh<br>";
 }
 
 // ------------------ Tabs ------------------
@@ -163,10 +144,10 @@ function openTab(tabName) {
   document.getElementById(tabName+'Content').classList.add('active');
 }
 
-// ------------------ On page load ------------------
+// ------------------ On Page Load ------------------
 window.onload = () => {
-  openTab('live');
-  loadData();
+  openTab('live');          // Live tab active by default
+  loadData();               // Load live + history data
   setInterval(loadData, 10000); // refresh every 10s
 };
 </script>
@@ -183,22 +164,14 @@ window.onload = () => {
 <!-- Live Tab -->
 <div id="liveContent" class="tab-content">
   <div id="realtime">Loading live data...</div>
+  <canvas id="liveChart" width="1000" height="400"></canvas>
 </div>
 
 <!-- History Tab -->
 <div id="historyContent" class="tab-content">
-  <label>Start: <input type="datetime-local" id="start"></label>
-  <label>End: <input type="datetime-local" id="end"></label>
-  <button onclick="filterHistory()">Apply</button>
-  <button onclick="clearHistoryFilter()">Clear</button>
-
-  <!-- KWh totals -->
-  <div id="kwhTotals" style="margin-top:10px; font-weight:bold;">Loading totals...</div>
-
-  <!-- Chart -->
-  <div id="historyChartContainer" style="margin-top:20px;">
-    <canvas id="historyChart" width="1000" height="400"></canvas>
-  </div>
+  <div id="historyTotals">Loading history...</div>
+  <canvas id="historyChart" width="1000" height="400"></canvas>
 </div>
+
 </body>
 </html>
