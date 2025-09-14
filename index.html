@@ -75,6 +75,8 @@ function updateLiveReadings(data) {
 }
 
 // ------------------ Draw live chart ------------------
+let liveChart; // separate from historyChart
+
 function drawLiveChart(data) {
   if (!data.length) return;
   const labels = data.map(dp => new Date(dp.timestamp).toLocaleTimeString('en-PH', {hour12:false, timeZone:'Asia/Manila'}));
@@ -86,13 +88,13 @@ function drawLiveChart(data) {
   const batt = data.map(dp => dp.battery_active_power);
   const inverter = data.map(dp => dp.inverter_power);
 
-  if(liveChart) liveChart.destroy();
+  if(liveChart) liveChart.destroy(); // only destroy liveChart
   const ctx = document.getElementById('liveChart').getContext('2d');
   liveChart = new Chart(ctx, {
-    type:'line',
-    data:{
+    type: 'line',
+    data: {
       labels: labels,
-      datasets:[
+      datasets: [
         {label:'PV Total (kW)', data:pvTotal, borderColor:'green', fill:false},
         {label:'PV1 (kW)', data:pv1, borderColor:'blue', fill:false},
         {label:'PV2 (kW)', data:pv2, borderColor:'orange', fill:false},
@@ -102,9 +104,10 @@ function drawLiveChart(data) {
         {label:'Inverter (kW)', data:inverter, borderColor:'red', fill:false}
       ]
     },
-    options:{responsive:true, scales:{x:{display:true}}}
+    options: { responsive:true, scales:{ x:{display:true} } }
   });
 }
+
 
 // ------------------ Draw history chart ------------------
 function drawHistoryChart(data) {
@@ -229,3 +232,4 @@ window.onload = () => {
 </div>
 </body>
 </html>
+
