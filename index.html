@@ -15,7 +15,8 @@
 <script>
 const googleSheetURL = "https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec";
 
-let chart;
+let liveChart;     // separate Chart instance for live tab
+let historyChart;  // separate Chart instance for history tab
 let allData = [];
 let lastLiveData = {};
 
@@ -85,9 +86,9 @@ function drawLiveChart(data) {
   const batt = data.map(dp => dp.battery_active_power);
   const inverter = data.map(dp => dp.inverter_power);
 
-  if(chart) chart.destroy();
+  if(liveChart) liveChart.destroy();
   const ctx = document.getElementById('liveChart').getContext('2d');
-  chart = new Chart(ctx, {
+  liveChart = new Chart(ctx, {
     type:'line',
     data:{
       labels: labels,
@@ -110,19 +111,23 @@ function drawHistoryChart(data) {
   if (!data.length) return;
   const labels = data.map(dp => new Date(dp.timestamp).toLocaleString('en-PH', {hour12:false, timeZone:'Asia/Manila'}));
   const pvTotal = data.map(dp => dp.pv_total_power);
+  const pv1 = data.map(dp => dp.pv1_input_power);
+  const pv2 = data.map(dp => dp.pv2_input_power);
   const load = data.map(dp => dp.load_active_power);
   const grid = data.map(dp => dp.grid_active_power);
   const batt = data.map(dp => dp.battery_active_power);
   const inverter = data.map(dp => dp.inverter_power);
 
+  if(historyChart) historyChart.destroy();
   const ctx = document.getElementById('historyChart').getContext('2d');
-  if(chart) chart.destroy();
-  chart = new Chart(ctx, {
+  historyChart = new Chart(ctx, {
     type:'line',
     data:{
       labels: labels,
       datasets:[
         {label:'PV Total (kW)', data:pvTotal, borderColor:'green', fill:false},
+        {label:'PV1 (kW)', data:pv1, borderColor:'blue', fill:false},
+        {label:'PV2 (kW)', data:pv2, borderColor:'orange', fill:false},
         {label:'Load (kW)', data:load, borderColor:'purple', fill:false},
         {label:'Grid (kW)', data:grid, borderColor:'gray', fill:false},
         {label:'Battery (kW)', data:batt, borderColor:'black', fill:false},
@@ -137,7 +142,11 @@ function drawHistoryChart(data) {
 function filterHistory() {
   const startInput = document.getElementById("start").value;
   const endInput = document.getElementById("end").value;
-  if (!startInput || !endInput) { drawHistoryChart(allData); return; }
+  if (!startInput || !endInput) { 
+    drawHistoryChart(allData);
+    updateKwhTotals(allData);
+    return; 
+  }
 
   const start = new Date(startInput+":00+08:00").getTime();
   const end = new Date(endInput+":00+08:00").getTime();
@@ -157,10 +166,12 @@ function clearHistoryFilter() {
 // ------------------ Update kWh totals ------------------
 function updateKwhTotals(data) {
   if(data.length < 2) return;
-  let totalPv=0, totalLoad=0, totalBatt=0, totalGrid=0, totalInverter=0;
+  let totalPv=0, totalPv1=0, totalPv2=0, totalLoad=0, totalBatt=0, totalGrid=0, totalInverter=0;
   for(let i=1; i<data.length; i++){
     let dtHours = (data[i].timestamp - data[i-1].timestamp)/1000/3600;
     totalPv += data[i-1].pv_total_power * dtHours;
+    totalPv1 += data[i-1].pv1_input_power * dtHours;
+    totalPv2 += data[i-1].pv2_input_power * dtHours;
     totalLoad += data[i-1].load_active_power * dtHours;
     totalBatt += data[i-1].battery_active_power * dtHours;
     totalGrid += data[i-1].grid_active_power * dtHours;
@@ -168,6 +179,8 @@ function updateKwhTotals(data) {
   }
   document.getElementById('kwhTotals').innerHTML =
     `PV Total: ${totalPv.toFixed(3)} kWh<br>` +
+    `PV1: ${totalPv1.toFixed(3)} kWh<br>` +
+    `PV2: ${totalPv2.toFixed(3)} kWh<br>` +
     `Load: ${totalLoad.toFixed(3)} kWh<br>` +
     `Grid: ${totalGrid.toFixed(3)} kWh<br>` +
     `Battery: ${totalBatt.toFixed(3)} kWh<br>` +
