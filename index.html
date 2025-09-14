@@ -77,24 +77,19 @@ function updateLiveReadings(data) {
 }
 
 function drawLiveChart(data) {
-  const labels=[], pvTotal=[], pv1=[], pv2=[], load=[], grid=[], batt=[], inverter=[];
+  if (!data.length) return;
+  const labels = data.map(dp => new Date(dp.timestamp).toLocaleTimeString('en-PH', {hour12:false, timeZone:'Asia/Manila'}));
+  const pvTotal = data.map(dp => dp.pv_total_power);
+  const pv1 = data.map(dp => dp.pv1_input_power);
+  const pv2 = data.map(dp => dp.pv2_input_power);
+  const load = data.map(dp => dp.load_active_power);
+  const grid = data.map(dp => dp.grid_active_power);
+  const batt = data.map(dp => dp.battery_active_power);
+  const inverter = data.map(dp => dp.inverter_power);
 
-  for (let dp of data) {
-    let dt = new Date(dp.timestamp);
-    labels.push(dt.toLocaleString('en-PH', {hour12:false, timeZone:'Asia/Manila'}));
-    pvTotal.push(dp.pv_total_power);
-    pv1.push(dp.pv1_input_power);
-    pv2.push(dp.pv2_input_power);
-    load.push(dp.load_active_power);
-    grid.push(dp.grid_active_power);
-    batt.push(dp.battery_active_power);
-    inverter.push(dp.inverter_power);
-  }
-
-  if(liveChart) liveChart.destroy();
-
-  let ctx = document.getElementById('liveChart').getContext('2d');
-  liveChart = new Chart(ctx, {
+  if(chart) chart.destroy();
+  const ctx = document.getElementById('liveChart').getContext('2d');
+  chart = new Chart(ctx, {
     type:'line',
     data:{
       labels: labels,
@@ -175,3 +170,4 @@ window.onload = () => {
 
 </body>
 </html>
+
