@@ -14,7 +14,15 @@
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
-let tooltipTimestamps = []; // ✅ store actual timestamps for tooltips
+let tooltipTimestamps = [];
+
+// --- Convert Manila timestamp to Date object ---
+function manilaDate(ts) {
+  // ts is already in Manila time (ms since epoch)
+  let dt = new Date(ts);
+  // adjust to Manila timezone explicitly for display
+  return new Date(dt.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+}
 
 // --- Load historical data from Google Sheets ---
 async function loadHistoryFromSheet() {
@@ -44,9 +52,9 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        let dt = new Date(dp.timestamp);
+        let dt = manilaDate(dp.timestamp);  // convert timestamp to Manila
         labels.push(dt.toLocaleTimeString('en-PH', { hour12: true, hour: '2-digit', minute: '2-digit' }));
-        tooltipTimestamps.push(dp.timestamp); // store timestamp for tooltip
+        tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
         battCharge.push(Number(dp.battery_charging_power));
@@ -92,26 +100,19 @@ function drawChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { 
-                    display: true,
-                    ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 }
-                },
-                y: { display: true, beginAtZero: true, min: 0, max: maxY }
+                x: { display: true, ticks: { autoSkip: true, maxRotation:0, minRotation:0 } },
+                y: { display: true, beginAtZero: true, min:0, max:maxY }
             },
             plugins: {
-                zoom: {
-                    pan: { enabled: true, mode: 'x' },
-                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
-                },
+                zoom: { pan:{enabled:true, mode:'x'}, zoom:{wheel:{enabled:true}, pinch:{enabled:true}, mode:'x'} },
                 tooltip: {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            let dt = new Date(tooltipTimestamps[idx]);
+                            let dt = manilaDate(tooltipTimestamps[idx]);
                             return dt.toLocaleString('en-PH', {
-                                hour12: true,
-                                year: 'numeric', month: '2-digit', day: '2-digit',
-                                hour: '2-digit', minute: '2-digit', second: '2-digit'
+                                hour12: true, year:'numeric', month:'2-digit', day:'2-digit',
+                                hour:'2-digit', minute:'2-digit', second:'2-digit'
                             });
                         },
                         label: function(tooltipItem) {
@@ -130,8 +131,9 @@ function filterChart() {
   let endInput   = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
-  let start = new Date(startInput).getTime();
-  let end   = new Date(endInput).getTime();
+  // convert filter input to Manila timestamp
+  let start = new Date(startInput + ":00").getTime(); // assume input is local, add seconds
+  let end   = new Date(endInput + ":00").getTime();
 
   let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
   drawChart(filtered);
@@ -158,9 +160,7 @@ async function clearHistory() {
 }
 
 // --- On page load ---
-window.onload = async () => {
-  await loadHistoryFromSheet();
-};
+window.onload = async () => { await loadHistoryFromSheet(); };
 </script>
 </head>
 <body>
