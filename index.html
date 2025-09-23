@@ -16,25 +16,17 @@ let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
 let tooltipTimestamps = []; // store actual timestamps for tooltips
 
-// --- Convert timestamp to Manila time string in 12-hour format ---
+// --- Convert timestamp to Manila time string ---
 function formatManila(ts) {
   let dt = new Date(ts);
   let year = dt.getFullYear();
   let month = ("0" + (dt.getMonth() + 1)).slice(-2);
   let day = ("0" + dt.getDate()).slice(-2);
-
-  let hour = dt.getHours() % 12;
-  if (hour === 0) hour = 12;  // 12-hour format adjustment
-  hour = ("0" + hour).slice(-2);
-
+  let hour = ("0" + dt.getHours()).slice(-2);
   let min = ("0" + dt.getMinutes()).slice(-2);
   let sec = ("0" + dt.getSeconds()).slice(-2);
-
-  let ampm = dt.getHours() >= 12 ? "PM" : "AM";
-
-  return `${year}-${month}-${day} ${hour}:${min}:${sec} ${ampm}`;
+  return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
 }
-
 
 // --- Load historical data from Google Sheets ---
 async function loadHistoryFromSheet() {
@@ -64,8 +56,7 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        // X-axis: show 12-hour time only
-        labels.push(new Date(dp.timestamp).toLocaleTimeString('en-PH', { hour12: true, hour: '2-digit', minute: '2-digit' }));
+        labels.push(formatManila(dp.timestamp)); // Manila time for x-axis
         tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
@@ -124,8 +115,7 @@ function drawChart(data) {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            // Tooltip: 12-hour Manila time with seconds
-                            return formatManila12H(tooltipTimestamps[idx], true);
+                            return formatManila(tooltipTimestamps[idx]);
                         },
                         label: function(tooltipItem) {
                             return tooltipItem.dataset.label + ': ' + tooltipItem.formattedValue + ' kW';
@@ -199,4 +189,3 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
-
