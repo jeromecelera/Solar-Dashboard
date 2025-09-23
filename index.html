@@ -14,14 +14,18 @@
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
-let tooltipTimestamps = [];
+let tooltipTimestamps = []; // store actual timestamps for tooltips
 
-// --- Convert Manila timestamp to Date object ---
-function manilaDate(ts) {
-  // ts is already in Manila time (ms since epoch)
+// --- Convert timestamp to Manila time string ---
+function formatManila(ts) {
   let dt = new Date(ts);
-  // adjust to Manila timezone explicitly for display
-  return new Date(dt.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+  let year = dt.getFullYear();
+  let month = ("0" + (dt.getMonth() + 1)).slice(-2);
+  let day = ("0" + dt.getDate()).slice(-2);
+  let hour = ("0" + dt.getHours()).slice(-2);
+  let min = ("0" + dt.getMinutes()).slice(-2);
+  let sec = ("0" + dt.getSeconds()).slice(-2);
+  return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
 }
 
 // --- Load historical data from Google Sheets ---
@@ -52,8 +56,7 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        let dt = manilaDate(dp.timestamp);  // convert timestamp to Manila
-        labels.push(dt.toLocaleTimeString('en-PH', { hour12: true, hour: '2-digit', minute: '2-digit' }));
+        labels.push(formatManila(dp.timestamp)); // Manila time for x-axis
         tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
@@ -100,20 +103,19 @@ function drawChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { display: true, ticks: { autoSkip: true, maxRotation:0, minRotation:0 } },
-                y: { display: true, beginAtZero: true, min:0, max:maxY }
+                x: { display: true, ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 } },
+                y: { display: true, beginAtZero: true, min: 0, max: maxY }
             },
             plugins: {
-                zoom: { pan:{enabled:true, mode:'x'}, zoom:{wheel:{enabled:true}, pinch:{enabled:true}, mode:'x'} },
+                zoom: {
+                    pan: { enabled: true, mode: 'x' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                },
                 tooltip: {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            let dt = manilaDate(tooltipTimestamps[idx]);
-                            return dt.toLocaleString('en-PH', {
-                                hour12: true, year:'numeric', month:'2-digit', day:'2-digit',
-                                hour:'2-digit', minute:'2-digit', second:'2-digit'
-                            });
+                            return formatManila(tooltipTimestamps[idx]);
                         },
                         label: function(tooltipItem) {
                             return tooltipItem.dataset.label + ': ' + tooltipItem.formattedValue + ' kW';
@@ -125,15 +127,18 @@ function drawChart(data) {
     });
 }
 
-// --- Filter chart by datetime range ---
+// --- Filter chart by datetime range (Manila time) ---
 function filterChart() {
   let startInput = document.getElementById("start").value;
   let endInput   = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
-  // convert filter input to Manila timestamp
-  let start = new Date(startInput + ":00").getTime(); // assume input is local, add seconds
-  let end   = new Date(endInput + ":00").getTime();
+  // Parse as Manila time by creating a Date object from the input string
+  let [startDate, startTime] = startInput.split('T');
+  let [endDate, endTime] = endInput.split('T');
+
+  let start = new Date(`${startDate}T${startTime}:00`).getTime();
+  let end   = new Date(`${endDate}T${endTime}:00`).getTime();
 
   let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
   drawChart(filtered);
@@ -160,7 +165,9 @@ async function clearHistory() {
 }
 
 // --- On page load ---
-window.onload = async () => { await loadHistoryFromSheet(); };
+window.onload = async () => {
+  await loadHistoryFromSheet();
+};
 </script>
 </head>
 <body>
