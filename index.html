@@ -14,32 +14,35 @@
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
-let tooltipTimestamps = []; // store actual timestamps for tooltips
+let tooltipTimestamps = [];
 
-// --- Convert timestamp to Manila time string ---
+// --- Convert timestamp to Manila time string (12-hour) ---
 function formatManila(ts) {
   let dt = new Date(ts);
-  let year = dt.getFullYear();
-  let month = ("0" + (dt.getMonth() + 1)).slice(-2);
-  let day = ("0" + dt.getDate()).slice(-2);
-  let hour = ("0" + dt.getHours()).slice(-2);
-  let min = ("0" + dt.getMinutes()).slice(-2);
-  let sec = ("0" + dt.getSeconds()).slice(-2);
-  return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).format(dt);
 }
 
-// --- Set datetime pickers to Manila time ---
+// --- Set datetime pickers to Manila time (24h format for <input>) ---
 function setPickerToManila(inputId, ts) {
   let dt = new Date(ts);
-  let manilaParts = new Intl.DateTimeFormat('sv', {
+  let parts = new Intl.DateTimeFormat('sv', {
     timeZone: 'Asia/Manila',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(dt);
 
-  let parts = {};
-  manilaParts.forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
-  let value = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  let map = {};
+  parts.forEach(p => { if (p.type !== 'literal') map[p.type] = p.value; });
+  let value = `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
   document.getElementById(inputId).value = value;
 }
 
@@ -51,7 +54,6 @@ async function loadHistoryFromSheet() {
     allData = await resp.json();
     drawChart(allData);
 
-    // Set datetime pickers to Manila time of first and last data points
     if (allData.length > 0) {
       setPickerToManila("start", allData[0].timestamp);
       setPickerToManila("end", allData[allData.length - 1].timestamp);
@@ -77,7 +79,7 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        labels.push(formatManila(dp.timestamp)); // Manila time for x-axis
+        labels.push(formatManila(dp.timestamp));
         tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
@@ -154,11 +156,8 @@ function filterChart() {
   let endInput   = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
-  let [startDate, startTime] = startInput.split('T');
-  let [endDate, endTime] = endInput.split('T');
-
-  let start = new Date(`${startDate}T${startTime}:00`).getTime();
-  let end   = new Date(`${endDate}T${endTime}:00`).getTime();
+  let start = new Date(startInput + ":00").getTime();
+  let end   = new Date(endInput + ":00").getTime();
 
   let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
   drawChart(filtered);
@@ -183,6 +182,11 @@ async function clearHistory() {
     document.getElementById("totals").innerHTML = "History cleared.";
   }
 }
+
+// --- On page load ---
+window.onload = async () => {
+  await loadHistoryFromSheet();
+};
 </script>
 </head>
 <body>
@@ -202,12 +206,5 @@ async function clearHistory() {
   <canvas id="chart"></canvas>
 </div><br>
 <button onclick="clearHistory()">Clear History</button>
-
-<script>
-// --- On page load ---
-window.onload = async () => {
-  await loadHistoryFromSheet();
-};
-</script>
 </body>
 </html>
