@@ -88,18 +88,36 @@ function drawChart(data) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { display: true, ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 } },
+                x: { display: true },
                 y: { display: true, beginAtZero: true, min: 0, max: maxY }
             },
             plugins: {
                 zoom: {
                     pan: { enabled: true, mode: 'x' },
                     zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            // tooltipItems is an array, we usually have one point
+                            let idx = tooltipItems[0].dataIndex;
+                            let ts = allData[idx].timestamp;
+                            let dt = new Date(ts);
+                            return dt.toLocaleString('en-PH', { 
+                                hour12: true, 
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit', second: '2-digit' 
+                            });
+                        },
+                        label: function(tooltipItem) {
+                            return tooltipItem.dataset.label + ': ' + tooltipItem.formattedValue + ' kW';
+                        }
+                    }
                 }
             }
         }
-    });
-}
+});
+
 
 // --- Filter chart by datetime range ---
 function filterChart() {
@@ -163,4 +181,5 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
+
 
