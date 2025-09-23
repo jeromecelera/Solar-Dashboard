@@ -11,6 +11,19 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
+const MANILA_OFFSET = 8 * 60; // UTC+8 in minutes
+
+function manilaToPicker(ts) {
+  const dt = new Date(ts);
+  const utc = dt.getTime() + dt.getTimezoneOffset() * 60000;
+  const manilaTime = new Date(utc + MANILA_OFFSET * 60000);
+  const yyyy = manilaTime.getFullYear();
+  const mm = String(manilaTime.getMonth() + 1).padStart(2,'0');
+  const dd = String(manilaTime.getDate()).padStart(2,'0');
+  const hh = String(manilaTime.getHours()).padStart(2,'0');
+  const min = String(manilaTime.getMinutes()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
@@ -166,7 +179,11 @@ async function clearHistory() {
 
 // --- On page load ---
 window.onload = async () => {
-  await loadHistoryFromSheet();
+  await loadHistoryFromSheet(); // keep your existing function
+  if(allData.length > 0) {
+    document.getElementById("start").value = manilaToPicker(allData[0].timestamp);
+    document.getElementById("end").value   = manilaToPicker(allData[allData.length-1].timestamp);
+  }
 };
 </script>
 </head>
@@ -189,3 +206,4 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
+
