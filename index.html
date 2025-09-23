@@ -19,17 +19,28 @@ let tooltipTimestamps = []; // store actual timestamps for tooltips
 // --- Convert timestamp to Manila time string ---
 function formatManila(ts) {
   let dt = new Date(ts);
-  // Manila is UTC+8
-  let utc = dt.getTime() + dt.getTimezoneOffset()*60000;
-  let manila = new Date(utc + 8*3600000);
-  
-  let year = manila.getFullYear();
-  let month = ("0" + (manila.getMonth() + 1)).slice(-2);
-  let day = ("0" + manila.getDate()).slice(-2);
-  let hour = ("0" + manila.getHours()).slice(-2);
-  let min = ("0" + manila.getMinutes()).slice(-2);
-  let sec = ("0" + manila.getSeconds()).slice(-2);
+  let year = dt.getFullYear();
+  let month = ("0" + (dt.getMonth() + 1)).slice(-2);
+  let day = ("0" + dt.getDate()).slice(-2);
+  let hour = ("0" + dt.getHours()).slice(-2);
+  let min = ("0" + dt.getMinutes()).slice(-2);
+  let sec = ("0" + dt.getSeconds()).slice(-2);
   return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
+}
+
+// --- Set datetime pickers to Manila time ---
+function setPickerToManila(inputId, ts) {
+  let dt = new Date(ts);
+  let manilaParts = new Intl.DateTimeFormat('sv', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(dt);
+
+  let parts = {};
+  manilaParts.forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+  let value = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  document.getElementById(inputId).value = value;
 }
 
 // --- Load historical data from Google Sheets ---
@@ -39,6 +50,12 @@ async function loadHistoryFromSheet() {
     if (!resp.ok) throw new Error("Network response not ok");
     allData = await resp.json();
     drawChart(allData);
+
+    // Set datetime pickers to Manila time of first and last data points
+    if (allData.length > 0) {
+      setPickerToManila("start", allData[0].timestamp);
+      setPickerToManila("end", allData[allData.length - 1].timestamp);
+    }
   } catch (e) {
     console.error("Failed to load history:", e);
     document.getElementById("totals").innerHTML = "No data available.";
@@ -137,12 +154,11 @@ function filterChart() {
   let endInput   = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
-  // Treat inputs as Manila time (UTC+8)
   let [startDate, startTime] = startInput.split('T');
   let [endDate, endTime] = endInput.split('T');
 
-  let start = new Date(`${startDate}T${startTime}:00+08:00`).getTime();
-  let end   = new Date(`${endDate}T${endTime}:00+08:00`).getTime();
+  let start = new Date(`${startDate}T${startTime}:00`).getTime();
+  let end   = new Date(`${endDate}T${endTime}:00`).getTime();
 
   let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
   drawChart(filtered);
@@ -167,11 +183,6 @@ async function clearHistory() {
     document.getElementById("totals").innerHTML = "History cleared.";
   }
 }
-
-// --- On page load ---
-window.onload = async () => {
-  await loadHistoryFromSheet();
-};
 </script>
 </head>
 <body>
@@ -191,5 +202,12 @@ window.onload = async () => {
   <canvas id="chart"></canvas>
 </div><br>
 <button onclick="clearHistory()">Clear History</button>
+
+<script>
+// --- On page load ---
+window.onload = async () => {
+  await loadHistoryFromSheet();
+};
+</script>
 </body>
 </html>
