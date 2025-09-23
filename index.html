@@ -18,7 +18,7 @@ let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], i
 // --- Load historical data from Google Sheets ---
 async function loadHistoryFromSheet() {
   try {
-    let resp = await fetch("YOUR_GOOGLE_SCRIPT_URL_HERE"); // replace with your script web app URL
+    let resp = await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec"); // replace with your script web app URL
     if (!resp.ok) throw new Error("Network response not ok");
     allData = await resp.json();
     drawChart(allData);
@@ -48,7 +48,7 @@ function drawChart(data) {
         pvTotal.push(Number(dp.pv_total_power));
         battCharge.push(Number(dp.battery_charging_power));
         battDischarge.push(Number(dp.battery_discharging_power));
-        load.push(Number(dp.output_active_power));  // ✅ your load column
+        load.push(Number(dp.load_active_power));  // ✅ your load column
         inverter.push(Number(dp.inverter_power));
 
         if (i > 0) {
@@ -56,7 +56,7 @@ function drawChart(data) {
             pvTotalKWH       += dp.pv_total_power * dtHours;
             battChargeKWH    += dp.battery_charging_power * dtHours;
             battDischargeKWH += dp.battery_discharging_power * dtHours;
-            loadKWH          += dp.output_active_power * dtHours;
+            loadKWH          += dp.load_active_power * dtHours;
             inverterKWH      += dp.inverter_power * dtHours;
         }
     }
@@ -127,7 +127,11 @@ function clearChartFilter() {
 // --- Clear history (Google Sheet reset via script URL) ---
 async function clearHistory() {
   if (confirm("Are you sure you want to clear history?")) {
-    await fetch("YOUR_GOOGLE_SCRIPT_URL_HERE?clear=1");
+    await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec", {
+      method: "POST",
+      body: JSON.stringify({ action: "clear" }),
+      headers: { "Content-Type": "application/json" }
+    });
     allData = [];
     drawChart([]);
     document.getElementById("totals").innerHTML = "History cleared.";
@@ -159,3 +163,4 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
+
