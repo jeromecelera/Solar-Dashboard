@@ -16,31 +16,15 @@ let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
 let tooltipTimestamps = []; // store actual timestamps for tooltips
 
-// --- Convert timestamp to Manila time string ---
-function formatManila(ts) {
+// --- Convert timestamp to Manila 12-hour format string ---
+function formatManila12H(ts, withSeconds = false) {
   let dt = new Date(ts);
-  let year = dt.getFullYear();
-  let month = ("0" + (dt.getMonth() + 1)).slice(-2);
-  let day = ("0" + dt.getDate()).slice(-2);
-  let hour = ("0" + dt.getHours()).slice(-2);
-  let min = ("0" + dt.getMinutes()).slice(-2);
-  let sec = ("0" + dt.getSeconds()).slice(-2);
-  return `${year}-${month}-${day} ${hour}:${min}:${sec}`;
-}
-
-// --- Set datetime pickers to Manila time ---
-function setPickerToManila(inputId, ts) {
-  let dt = new Date(ts);
-  let manilaParts = new Intl.DateTimeFormat('sv', {
-    timeZone: 'Asia/Manila',
+  return dt.toLocaleString('en-PH', { 
+    hour12: true, 
     year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false
-  }).formatToParts(dt);
-
-  let parts = {};
-  manilaParts.forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
-  let value = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-  document.getElementById(inputId).value = value;
+    hour: '2-digit', minute: '2-digit',
+    second: withSeconds ? '2-digit' : undefined
+  });
 }
 
 // --- Load historical data from Google Sheets ---
@@ -50,12 +34,6 @@ async function loadHistoryFromSheet() {
     if (!resp.ok) throw new Error("Network response not ok");
     allData = await resp.json();
     drawChart(allData);
-
-    // Set datetime pickers to Manila time of first and last data points
-    if (allData.length > 0) {
-      setPickerToManila("start", allData[0].timestamp);
-      setPickerToManila("end", allData[allData.length - 1].timestamp);
-    }
   } catch (e) {
     console.error("Failed to load history:", e);
     document.getElementById("totals").innerHTML = "No data available.";
@@ -77,7 +55,8 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        labels.push(formatManila(dp.timestamp)); // Manila time for x-axis
+        // X-axis: show 12-hour time only
+        labels.push(new Date(dp.timestamp).toLocaleTimeString('en-PH', { hour12: true, hour: '2-digit', minute: '2-digit' }));
         tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
@@ -136,7 +115,8 @@ function drawChart(data) {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            return formatManila(tooltipTimestamps[idx]);
+                            // Tooltip: 12-hour Manila time with seconds
+                            return formatManila12H(tooltipTimestamps[idx], true);
                         },
                         label: function(tooltipItem) {
                             return tooltipItem.dataset.label + ': ' + tooltipItem.formattedValue + ' kW';
@@ -154,6 +134,7 @@ function filterChart() {
   let endInput   = document.getElementById("end").value;
   if (!startInput || !endInput) { drawChart(allData); return; }
 
+  // Parse as Manila time by creating a Date object from the input string
   let [startDate, startTime] = startInput.split('T');
   let [endDate, endTime] = endInput.split('T');
 
@@ -183,6 +164,11 @@ async function clearHistory() {
     document.getElementById("totals").innerHTML = "History cleared.";
   }
 }
+
+// --- On page load ---
+window.onload = async () => {
+  await loadHistoryFromSheet();
+};
 </script>
 </head>
 <body>
@@ -202,12 +188,5 @@ async function clearHistory() {
   <canvas id="chart"></canvas>
 </div><br>
 <button onclick="clearHistory()">Clear History</button>
-
-<script>
-// --- On page load ---
-window.onload = async () => {
-  await loadHistoryFromSheet();
-};
-</script>
 </body>
 </html>
