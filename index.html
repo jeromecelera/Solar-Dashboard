@@ -16,16 +16,25 @@ let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
 let tooltipTimestamps = []; // store actual timestamps for tooltips
 
-// --- Convert timestamp to Manila 12-hour format string ---
-function formatManila12H(ts, withSeconds = false) {
+// --- Convert timestamp to Manila time string in 12-hour format ---
+function formatManila(ts) {
   let dt = new Date(ts);
-  return dt.toLocaleString('en-PH', { 
-    hour12: true, 
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    second: withSeconds ? '2-digit' : undefined
-  });
+  let year = dt.getFullYear();
+  let month = ("0" + (dt.getMonth() + 1)).slice(-2);
+  let day = ("0" + dt.getDate()).slice(-2);
+
+  let hour = dt.getHours() % 12;
+  if (hour === 0) hour = 12;  // 12-hour format adjustment
+  hour = ("0" + hour).slice(-2);
+
+  let min = ("0" + dt.getMinutes()).slice(-2);
+  let sec = ("0" + dt.getSeconds()).slice(-2);
+
+  let ampm = dt.getHours() >= 12 ? "PM" : "AM";
+
+  return `${year}-${month}-${day} ${hour}:${min}:${sec} ${ampm}`;
 }
+
 
 // --- Load historical data from Google Sheets ---
 async function loadHistoryFromSheet() {
@@ -190,3 +199,4 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
+
