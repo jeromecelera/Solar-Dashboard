@@ -14,11 +14,12 @@
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
+let tooltipTimestamps = []; // ✅ store actual timestamps for tooltips
 
 // --- Load historical data from Google Sheets ---
 async function loadHistoryFromSheet() {
   try {
-    let resp = await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec"); // replace with your script web app URL
+    let resp = await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec");
     if (!resp.ok) throw new Error("Network response not ok");
     allData = await resp.json();
     drawChart(allData);
@@ -37,6 +38,7 @@ function drawChart(data) {
     battDischarge = [];
     load = [];
     inverter = [];
+    tooltipTimestamps = [];
 
     let pvTotalKWH = 0, battChargeKWH = 0, battDischargeKWH = 0, loadKWH = 0, inverterKWH = 0;
 
@@ -44,6 +46,7 @@ function drawChart(data) {
         let dp = data[i];
         let dt = new Date(dp.timestamp);
         labels.push(dt.toLocaleTimeString('en-PH', { hour12: true, hour: '2-digit', minute: '2-digit' }));
+        tooltipTimestamps.push(dp.timestamp); // store timestamp for tooltip
 
         pvTotal.push(Number(dp.pv_total_power));
         battCharge.push(Number(dp.battery_charging_power));
@@ -62,16 +65,17 @@ function drawChart(data) {
     }
 
     document.getElementById("totals").innerHTML =
-        "<b>KWH Totals (selected range):</b><br>" +
-        "PV Total: " + pvTotalKWH.toFixed(3) + " kWh<br>" +
-        "Battery Charging: " + battChargeKWH.toFixed(3) + " kWh<br>" +
-        "Battery Discharging: " + battDischargeKWH.toFixed(3) + " kWh<br>" +
-        "Load: " + loadKWH.toFixed(3) + " kWh<br>" +
-        "Inverter: " + inverterKWH.toFixed(3) + " kWh<br>";
+        `<b>KWH Totals (selected range):</b><br>
+        PV Total: ${pvTotalKWH.toFixed(3)} kWh<br>
+        Battery Charging: ${battChargeKWH.toFixed(3)} kWh<br>
+        Battery Discharging: ${battDischargeKWH.toFixed(3)} kWh<br>
+        Load: ${loadKWH.toFixed(3)} kWh<br>
+        Inverter: ${inverterKWH.toFixed(3)} kWh<br>`;
 
     if(chart) chart.destroy();
     let maxY = Math.max(...pvTotal, ...battCharge, ...battDischarge, ...load, ...inverter, 10) * 1.2;
     let ctx = document.getElementById('chart').getContext('2d');
+
     chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -90,11 +94,7 @@ function drawChart(data) {
             scales: {
                 x: { 
                     display: true,
-                    ticks: { 
-                        autoSkip: true,
-                        maxRotation: 0,
-                        minRotation: 0
-                    }
+                    ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 }
                 },
                 y: { display: true, beginAtZero: true, min: 0, max: maxY }
             },
@@ -107,10 +107,9 @@ function drawChart(data) {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            let ts = data[idx].timestamp; // use the filtered/current dataset
-                            let dt = new Date(ts);
-                            return dt.toLocaleString('en-PH', { 
-                                hour12: true, 
+                            let dt = new Date(tooltipTimestamps[idx]);
+                            return dt.toLocaleString('en-PH', {
+                                hour12: true,
                                 year: 'numeric', month: '2-digit', day: '2-digit',
                                 hour: '2-digit', minute: '2-digit', second: '2-digit'
                             });
@@ -134,11 +133,7 @@ function filterChart() {
   let start = new Date(startInput).getTime();
   let end   = new Date(endInput).getTime();
 
-  let filtered = allData.filter(dp => {
-    let ts = Number(dp.timestamp);
-    return ts >= start && ts <= end;
-  });
-
+  let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
   drawChart(filtered);
 }
 
@@ -148,7 +143,7 @@ function clearChartFilter() {
   drawChart(allData);
 }
 
-// --- Clear history (Google Sheet reset via script URL) ---
+// --- Clear history ---
 async function clearHistory() {
   if (confirm("Are you sure you want to clear history?")) {
     await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec", {
@@ -187,6 +182,3 @@ window.onload = async () => {
 <button onclick="clearHistory()">Clear History</button>
 </body>
 </html>
-
-
-
