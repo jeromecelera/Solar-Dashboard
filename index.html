@@ -14,52 +14,59 @@
 let chart;
 let allData = [];
 let labels = [], pvTotal = [], battCharge = [], battDischarge = [], load = [], inverter = [];
-let tooltipTimestamps = []; // store actual timestamps for tooltips
+let tooltipTimestamps = []; // store actual timestamps
 
 // --- Convert timestamp to Manila 12-hour format string ---
-function formatManila12H(ts, withSeconds = false) {
-  let dt = new Date(ts);
-  return dt.toLocaleString('en-PH', { 
-    timeZone: 'Asia/Manila',
-    hour12: true, 
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    second: withSeconds ? '2-digit' : undefined
-  });
-}
-
-// --- Set datetime pickers to Manila time ---
-function setPickerToManila(inputId, ts) {
-  let dt = new Date(ts);
-  let parts = new Intl.DateTimeFormat('sv', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false
-  }).formatToParts(dt).reduce((acc, p) => { if(p.type!=='literal') acc[p.type]=p.value; return acc; }, {});
-  let value = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-  document.getElementById(inputId).value = value;
-}
-
-// --- Load historical data from Google Sheets ---
-async function loadHistoryFromSheet() {
-  try {
-    let resp = await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec");
-    if (!resp.ok) throw new Error("Network response not ok");
-    allData = await resp.json();
-    drawChart(allData);
-
-    if (allData.length > 0) {
-      setPickerToManila("start", allData[0].timestamp);
-      setPickerToManila("end", allData[allData.length - 1].timestamp);
+function formatManila(ts, withSeconds = false, withDate = true) {
+    // ts is assumed to be milliseconds in Manila time
+    let options = {
+        timeZone: 'Asia/Manila',
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit'
+    };
+    if (withSeconds) options.second = '2-digit';
+    if (withDate) {
+        options.year = 'numeric';
+        options.month = '2-digit';
+        options.day = '2-digit';
     }
-  } catch (e) {
-    console.error("Failed to load history:", e);
-    document.getElementById("totals").innerHTML = "No data available.";
-    allData = [];
-  }
+    return new Intl.DateTimeFormat('en-PH', options).format(new Date(ts));
 }
 
-// --- Draw chart and calculate totals ---
+// --- Convert Manila timestamp to datetime-local string for pickers ---
+function manilaToDateTimeLocal(ts) {
+    let parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(new Date(ts));
+    let obj = {};
+    parts.forEach(p => { if (p.type !== 'literal') obj[p.type] = p.value; });
+    return `${obj.year}-${obj.month}-${obj.day}T${obj.hour}:${obj.minute}`;
+}
+
+// --- Load historical data ---
+async function loadHistoryFromSheet() {
+    try {
+        let resp = await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec");
+        if (!resp.ok) throw new Error("Network response not ok");
+        allData = await resp.json();
+        drawChart(allData);
+
+        // Set pickers to Manila time of first and last data points
+        if (allData.length > 0) {
+            document.getElementById("start").value = manilaToDateTimeLocal(allData[0].timestamp);
+            document.getElementById("end").value = manilaToDateTimeLocal(allData[allData.length - 1].timestamp);
+        }
+    } catch (e) {
+        console.error("Failed to load history:", e);
+        document.getElementById("totals").innerHTML = "No data available.";
+        allData = [];
+    }
+}
+
+// --- Draw chart ---
 function drawChart(data) {
     labels = [];
     pvTotal = [];
@@ -73,10 +80,8 @@ function drawChart(data) {
 
     for (let i = 0; i < data.length; i++) {
         let dp = data[i];
-        // X-axis: show Manila 12-hour time
-        labels.push(new Date(dp.timestamp).toLocaleString('en-PH', { 
-          timeZone: 'Asia/Manila', hour12:true, hour:'2-digit', minute:'2-digit'
-        }));
+
+        labels.push(formatManila(dp.timestamp, false, false)); // 12-hour time only on X-axis
         tooltipTimestamps.push(dp.timestamp);
 
         pvTotal.push(Number(dp.pv_total_power));
@@ -135,7 +140,7 @@ function drawChart(data) {
                     callbacks: {
                         title: function(tooltipItems) {
                             let idx = tooltipItems[0].dataIndex;
-                            return formatManila12H(tooltipTimestamps[idx], true);
+                            return formatManila(tooltipTimestamps[idx], true, true); // 12-hour Manila with seconds
                         },
                         label: function(tooltipItem) {
                             return tooltipItem.dataset.label + ': ' + tooltipItem.formattedValue + ' kW';
@@ -147,46 +152,42 @@ function drawChart(data) {
     });
 }
 
-// --- Filter chart by datetime range (Manila time) ---
+// --- Filter chart ---
 function filterChart() {
-  let startInput = document.getElementById("start").value;
-  let endInput   = document.getElementById("end").value;
-  if (!startInput || !endInput) { drawChart(allData); return; }
+    let startInput = document.getElementById("start").value;
+    let endInput   = document.getElementById("end").value;
+    if (!startInput || !endInput) { drawChart(allData); return; }
 
-  let [startDate, startTime] = startInput.split('T');
-  let [endDate, endTime] = endInput.split('T');
+    let start = new Date(startInput).getTime();
+    let end   = new Date(endInput).getTime();
 
-  // Parse as Manila time
-  let start = new Date(`${startDate}T${startTime}:00`).getTime();
-  let end   = new Date(`${endDate}T${endTime}:00`).getTime();
-
-  let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
-  drawChart(filtered);
+    let filtered = allData.filter(dp => dp.timestamp >= start && dp.timestamp <= end);
+    drawChart(filtered);
 }
 
 function clearChartFilter() {
-  document.getElementById("start").value = "";
-  document.getElementById("end").value = "";
-  drawChart(allData);
+    document.getElementById("start").value = "";
+    document.getElementById("end").value = "";
+    drawChart(allData);
 }
 
 // --- Clear history ---
 async function clearHistory() {
-  if (confirm("Are you sure you want to clear history?")) {
-    await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec", {
-      method: "POST",
-      body: JSON.stringify({ action: "clear" }),
-      headers: { "Content-Type": "application/json" }
-    });
-    allData = [];
-    drawChart([]);
-    document.getElementById("totals").innerHTML = "History cleared.";
-  }
+    if (confirm("Are you sure you want to clear history?")) {
+        await fetch("https://script.google.com/macros/s/AKfycbyTQz_iHQonE5aJP74K01vQ72JRlP56rq-Zp7u3lcZy4TGulg-hKwGhJ6uCJLU9wo4/exec", {
+            method: "POST",
+            body: JSON.stringify({ action: "clear" }),
+            headers: { "Content-Type": "application/json" }
+        });
+        allData = [];
+        drawChart([]);
+        document.getElementById("totals").innerHTML = "History cleared.";
+    }
 }
 
 // --- On page load ---
 window.onload = async () => {
-  await loadHistoryFromSheet();
+    await loadHistoryFromSheet();
 };
 </script>
 </head>
